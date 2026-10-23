@@ -11,6 +11,8 @@ collections:
     slug: "{{slug}}"
     fields:
       - { label: "Title", name: "title", widget: "string" }
+      - { label: "Genre", name: "genre", widget: "string", hint: "e.g. Sci-fi, Mystery, Psychological thriller" }
+      - { label: "Summary", name: "summary", widget: "text", hint: "A short blurb shown when readers click the info (i) button" }
       - { label: "Folder Name", name: "slug", widget: "string", hint: "e.g. first-novel, second-novel" }
       - label: "Files"
         name: "files"
