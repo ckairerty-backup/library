@@ -75,8 +75,23 @@
     border-radius: 10px;
     overflow: hidden;
   }
+  .novel-header { display: flex; align-items: center; }
+  .info-btn {
+    flex: none;
+    width: 28px; height: 28px;
+    margin-left: 12px;
+    border-radius: 50%;
+    border: 1.5px solid #94a3b8;
+    background: none;
+    color: #94a3b8;
+    font: italic 700 0.95rem Georgia, serif;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .info-btn:hover { background: #f1f5f9; color: #0f172a; border-color: #f1f5f9; }
   .novel-title-btn {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     background: none;
     border: none;
     color: #f1f5f9;
@@ -103,6 +118,43 @@
     padding: 0 20px 20px;
   }
   .novel-item.open .novel-files { display: flex; }
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(2,6,23,0.7);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px; z-index: 100;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    position: relative;
+    max-width: 480px; width: 100%;
+    max-height: 80vh; overflow-y: auto;
+    text-align: left;
+    background: #1e293b;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 28px 28px 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .modal h2 { margin: 0 32px 12px 0; font-size: 1.3rem; }
+  .modal .genre {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(56,189,248,0.15);
+    color: #7dd3fc;
+    font-size: 0.8rem; font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .modal .summary { color: #cbd5e1; line-height: 1.6; white-space: pre-line; margin: 0; }
+  .modal-close {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none;
+    color: #94a3b8; font-size: 1.6rem; line-height: 1;
+    cursor: pointer;
+  }
+  .modal-close:hover { color: #f1f5f9; }
   .status-msg {
     color: #94a3b8;
     font-size: 0.95rem;
@@ -120,14 +172,27 @@
     <footer>Files will be downloaded directly to your device.</footer>
   </div>
 
+  <div class="modal-overlay" id="infoOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <button class="modal-close" id="infoClose" aria-label="Close">&times;</button>
+      <h2 id="infoTitle"></h2>
+      <span class="genre" id="infoGenre"></span>
+      <p class="summary" id="infoSummary"></p>
+    </div>
+  </div>
+
   <script>
-    const GITHUB_OWNER = "ckairerty";
+    const GITHUB_OWNER = "ckairerty-backup";
     const GITHUB_REPO = "library";
     const GITHUB_BRANCH = "main";
     const NOVELS_PATH = "novels";
 
     function stripQuotes(value) {
-      return value.replace(/^["']|["']$/g, "");
+      if (/^".*"$/.test(value)) {
+        return value.slice(1, -1).replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      }
+      if (/^'.*'$/.test(value)) return value.slice(1, -1).replace(/''/g, "'");
+      return value;
     }
 
     function parseFrontmatter(text) {
@@ -170,8 +235,19 @@
         if (idx !== -1) {
           const key = line.slice(0, idx).trim();
           let value = line.slice(idx + 1).trim();
-          value = stripQuotes(value);
-          data[key] = value;
+          // Multi-line text (YAML block scalar: |, |-, >, >-)
+          if (/^[|>][+-]?$/.test(value)) {
+            const folded = value[0] === ">";
+            const block = [];
+            i++;
+            while (i < lines.length && (/^\s/.test(lines[i]) || lines[i].trim() === "")) {
+              block.push(lines[i].replace(/^ {1,2}/, ""));
+              i++;
+            }
+            data[key] = block.join(folded ? " " : "\n").trim();
+            continue;
+          }
+          data[key] = stripQuotes(value);
         }
         i++;
       }
@@ -222,10 +298,32 @@
           const item = document.createElement("div");
           item.className = "novel-item";
 
+          const header = document.createElement("div");
+          header.className = "novel-header";
+
           const btn = document.createElement("button");
           btn.className = "novel-title-btn";
-          btn.innerHTML = `<span>${title}</span><span class="chevron">▼</span>`;
+          const titleSpan = document.createElement("span");
+          titleSpan.textContent = title;
+          const chevron = document.createElement("span");
+          chevron.className = "chevron";
+          chevron.textContent = "▼";
+          btn.append(titleSpan, chevron);
           btn.addEventListener("click", () => item.classList.toggle("open"));
+          header.appendChild(btn);
+
+          if (entry.genre || entry.summary) {
+            const info = document.createElement("button");
+            info.className = "info-btn";
+            info.textContent = "i";
+            info.title = "About this novel";
+            info.setAttribute("aria-label", "About " + title);
+            info.addEventListener("click", (e) => {
+              e.stopPropagation();
+              openInfo(title, entry.genre, entry.summary);
+            });
+            header.appendChild(info);
+          }
 
           const filesWrap = document.createElement("div");
           filesWrap.className = "novel-files";
@@ -248,7 +346,7 @@
             });
           }
 
-          item.appendChild(btn);
+          item.appendChild(header);
           item.appendChild(filesWrap);
           listEl.appendChild(item);
         });
@@ -257,6 +355,20 @@
         console.error(err);
       }
     }
+
+    const overlay = document.getElementById("infoOverlay");
+    function openInfo(title, genre, summary) {
+      document.getElementById("infoTitle").textContent = title;
+      const g = document.getElementById("infoGenre");
+      g.textContent = genre || "";
+      g.style.display = genre ? "inline-block" : "none";
+      document.getElementById("infoSummary").textContent = summary || "";
+      overlay.classList.add("show");
+    }
+    function closeInfo() { overlay.classList.remove("show"); }
+    document.getElementById("infoClose").addEventListener("click", closeInfo);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeInfo(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeInfo(); });
 
     loadNovels();
   </script>
