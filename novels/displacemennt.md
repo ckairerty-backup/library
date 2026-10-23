@@ -1,5 +1,5 @@
 ---
-title: Displacemennt
+title: Displacement
 genre: Supernatural Horror, Psychological Thriller, Postmodern Fiction
 summary: A sleep-deprived high school student working on a crucial project
   forgets the government's 23:00 curfew rule, leading to eerie encounters with a
