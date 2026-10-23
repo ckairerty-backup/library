@@ -247,6 +247,11 @@
             data[key] = block.join(folded ? " " : "\n").trim();
             continue;
           }
+          // Long text can be wrapped by the CMS onto indented continuation lines
+          while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) {
+            i++;
+            value += " " + lines[i].trim();
+          }
           data[key] = stripQuotes(value);
         }
         i++;
